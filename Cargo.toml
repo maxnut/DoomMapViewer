@@ -1,0 +1,23 @@
+[package]
+name = "bevytest"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bevy = { version = "0.10.1"}
+tinywad = "0.1.2"
+bevy-earcutr = "0.9.0"
+
+[patch.crates-io]
+tinywad = { path = "C:\\Users\\MaxNu\\Documents\\shithole\\tinywad" }
+bevy-earcutr = { path = "C:\\Users\\MaxNu\\Documents\\shithole\\bevy-earcutr"}
+
+# Enable a small amount of optimization in debug mode
+[profile.dev]
+opt-level = 1
+
+# Enable high optimizations for dependencies (incl. Bevy), but not for our code:
+[profile.dev.package."*"]
+opt-level = 3
