@@ -1,11 +1,13 @@
 pub(crate) mod completemap;
 
+use crate::flat::Flat;
 use bevy::prelude::*;
 use bevy::render::render_resource::{AddressMode, Extent3d, TextureFormat};
 use bevy::render::texture::ImageSampler;
 use bevy::utils::hashbrown::HashMap;
 use bevy_earcutr::*;
 use completemap::*;
+use tinywad::lump::LumpKind;
 use tinywad::lumps::palette::Palettes;
 use tinywad::lumps::patch::DoomImage;
 use tinywad::models::lump::Lump;
@@ -15,17 +17,16 @@ pub struct MapManager {
     palette: Palettes,
     pub wad: Wad,
     pub map: CompleteMap,
-    pub tex_map: HashMap<String, Handle<Image>>,
+    pub tex_map: HashMap<String, Handle<StandardMaterial>>,
 }
 
 impl MapManager {
     pub fn new() -> Self {
-        
         let mut manager = MapManager {
             wad: Wad::new(),
             map: CompleteMap::default(),
             palette: Palettes::default(),
-            tex_map: HashMap::new()
+            tex_map: HashMap::new(),
         };
 
         manager.wad.load_from_file("DOOM2.wad");
@@ -201,7 +202,7 @@ impl MapManager {
         return manager;
     }
 
-    pub fn generateWall(
+    pub fn generate_wall(
         verts: &mut Vec<Vec3>,
         indices: &mut Vec<u32>,
         uvs: &mut Vec<Vec2>,
@@ -313,8 +314,6 @@ impl MapManager {
 
                 analyzed.push(current_linedef);
 
-                let linedef = &self.map.linedef_vec[current_linedef as usize];
-
                 let prev = order_count;
 
                 for line in sector.linedefs.clone() {
@@ -375,25 +374,63 @@ impl MapManager {
         return builder.build();
     }
 
-    pub fn getTexture(&self, mut images: ResMut<Assets<Image>>, name: String) -> Handle<Image> {
+    pub fn get_texture(
+        &mut self,
+        mut images: &mut Assets<Image>,
+        mut materials: &mut Assets<StandardMaterial>,
+        name: String,
+    ) -> Handle<StandardMaterial> {
         if self.tex_map.contains_key(&name) {
             return self.tex_map[&name].clone();
         }
 
-        let slime16data = self.wad.lump(name.as_str()).unwrap().data();
-        let mut slime16 = DoomImage::new(self.palette.clone(), slime16data);
-        slime16.parse();
+        let Some(texture_lump) = self.wad.lump(name.as_str())
+        else
+        {
+            return Handle::default();
+        };
+
+        let texture_lump_data = texture_lump.data();
+
+        info!(texture_lump_data.metadata.size);
+        info!(
+            "{}",
+            std::str::from_utf8(&texture_lump_data.metadata.name).unwrap()
+        );
+
+        if texture_lump_data.metadata.size <= 0 {
+            return Handle::default();
+        }
+
+        let (image_data, width, height) = if texture_lump_data.kind == LumpKind::Flat {
+            (
+                Flat::from_lump(texture_lump_data.buffer.as_slice())
+                    .get_image(self.palette.palette().unwrap()),
+                4096,
+                4096,
+            )
+        } else {
+            let mut slime16 = DoomImage::new(self.palette.clone(), texture_lump_data);
+
+            slime16.parse();
+
+            (
+                slime16.buffer(),
+                slime16.img_info.width,
+                slime16.img_info.height,
+            )
+        };
 
         let ext: Extent3d = Extent3d {
-            width: slime16.img_info.width as u32,
-            height: slime16.img_info.height as u32,
+            width: width as u32,
+            height: height as u32,
             ..default()
         };
 
         let mut coolasstexture = Image::new_fill(
             ext,
             bevy::render::render_resource::TextureDimension::D2,
-            slime16.buffer().as_slice(),
+            image_data.as_slice(),
             TextureFormat::Rgba8Unorm,
         );
 
@@ -404,7 +441,14 @@ impl MapManager {
 
         coolasstexture.sampler_descriptor = ImageSampler::Descriptor(descriptor);
 
-        return images.add(coolasstexture);
+        let material = materials.add(StandardMaterial {
+            base_color_texture: Some(images.add(coolasstexture)),
+            ..Default::default()
+        });
+
+        self.tex_map.insert(name, material.clone());
+
+        return material;
     }
 
     pub fn get_linedef_vector_as_vertices(&self, vec: &Vec<i16>) -> Vec<f64> {

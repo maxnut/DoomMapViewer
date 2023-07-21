@@ -1,6 +1,7 @@
+mod flat;
+#[allow(clippy::too_many_arguments)]
 mod mapmanager;
 
-use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
 use bevy::render::mesh::{self, PrimitiveTopology};
 use bevy::render::texture::Image;
@@ -26,7 +27,6 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    asset_server: Res<AssetServer>,
 ) {
     wireframe_config.global = true;
 
@@ -48,9 +48,7 @@ fn setup(
 
     let mut indices_index = 0;
 
-    let mut i = 0;
-
-    for linedef in &mut mapmanager.map.linedef_vec {
+    for (i, linedef) in mapmanager.map.linedef_vec.iter_mut().enumerate() {
         if linedef.front_sidedef >= 0 {
             let front_sidedef = &mapmanager.map.sidefef_vec[linedef.front_sidedef as usize];
 
@@ -59,18 +57,18 @@ fn setup(
             if linedef.back_sidedef >= 0 {
                 let back_sidedef = &mapmanager.map.sidefef_vec[linedef.back_sidedef as usize];
                 linedef.back = back_sidedef.clone();
-                if (front_sidedef.sector != back_sidedef.sector) {
+                if front_sidedef.sector != back_sidedef.sector {
                     mapmanager.map.sector_vec[front_sidedef.sector as usize]
                         .linedefs
-                        .push(i);
+                        .push(i as i16);
                     mapmanager.map.sector_vec[back_sidedef.sector as usize]
                         .linedefs
-                        .push(i);
+                        .push(i as i16);
                 }
             } else {
                 mapmanager.map.sector_vec[front_sidedef.sector as usize]
                     .linedefs
-                    .push(i);
+                    .push(i as i16);
             }
 
             let front_sec = &mapmanager.map.sector_vec[front_sidedef.sector as usize];
@@ -87,7 +85,7 @@ fn setup(
                 let back_sec = &mapmanager.map.sector_vec[back_sidedef.sector as usize];
 
                 if front_sec.ceil_height > back_sec.ceil_height {
-                    MapManager::generateWall(
+                    MapManager::generate_wall(
                         &mut vertices,
                         &mut indices,
                         &mut uvs,
@@ -102,7 +100,7 @@ fn setup(
                 }
 
                 if front_sec.ceil_height < back_sec.ceil_height {
-                    MapManager::generateWall(
+                    MapManager::generate_wall(
                         &mut vertices,
                         &mut indices,
                         &mut uvs,
@@ -117,7 +115,7 @@ fn setup(
                 }
 
                 if front_sec.floor_height < back_sec.floor_height {
-                    MapManager::generateWall(
+                    MapManager::generate_wall(
                         &mut vertices,
                         &mut indices,
                         &mut uvs,
@@ -132,7 +130,7 @@ fn setup(
                 }
 
                 if front_sec.floor_height > back_sec.floor_height {
-                    MapManager::generateWall(
+                    MapManager::generate_wall(
                         &mut vertices,
                         &mut indices,
                         &mut uvs,
@@ -146,7 +144,7 @@ fn setup(
                     );
                 }
             } else {
-                MapManager::generateWall(
+                MapManager::generate_wall(
                     &mut vertices,
                     &mut indices,
                     &mut uvs,
@@ -160,36 +158,28 @@ fn setup(
                 );
             }
         }
-        i += 1;
     }
 
-    let material = materials.add(StandardMaterial {
-        base_color_texture: Some(mapmanager.getTexture(images, "VILEJ5".to_string())),
-        ..Default::default()
-    });
-
-    for sector in &mapmanager.map.sector_vec {
+    for sector in &mapmanager.map.sector_vec.clone() {
         println!("\nNew Vector {} ---------------------", sector.light_level);
 
         let shapes = mapmanager.detect_shapes(sector);
 
         println!("Detected shapes: {}", shapes.len());
 
-        let mut biggest_area = std::f32::MIN;
+        let mut biggest_area = f32::MIN;
         let mut biggest_aabb_index = 0;
-
-        let mut j = 0;
 
         let mut holes: Vec<Vec<f64>>;
         holes = Vec::new();
 
-        for shape in shapes.clone() {
-            let mut min_x = std::f32::MAX;
-            let mut max_x = std::f32::MIN;
-            let mut min_y = std::f32::MAX;
-            let mut max_y = std::f32::MIN;
+        for (j, shape) in shapes.clone().into_iter().enumerate() {
+            let mut min_x = f32::MAX;
+            let mut max_x = f32::MIN;
+            let mut min_y = f32::MAX;
+            let mut max_y = f32::MIN;
 
-            let mut shape_vec = mapmanager.get_linedef_vector_as_vertices(&shape);
+            let shape_vec = mapmanager.get_linedef_vector_as_vertices(&shape);
 
             holes.push(shape_vec);
 
@@ -218,8 +208,6 @@ fn setup(
                 biggest_area = area;
                 biggest_aabb_index = j;
             }
-
-            j += 1;
         }
 
         let mut floor_vertices: Vec<f64>;
@@ -244,11 +232,15 @@ fn setup(
 
         match mesh_floor {
             Some(_) => {
-                let mut actual_mesh = mesh_floor.unwrap();
-                let cacca = commands
+                let actual_mesh = mesh_floor.unwrap();
+                commands
                     .spawn(PbrBundle {
                         mesh: meshes.add(actual_mesh),
-                        material: material.clone(),
+                        material: mapmanager.get_texture(
+                            &mut images,
+                            &mut materials,
+                            std::str::from_utf8(&sector.floor_tex).unwrap().to_string(),
+                        ),
                         ..default()
                     })
                     .insert(Transform {
@@ -275,7 +267,7 @@ fn setup(
 
     commands.spawn(PbrBundle {
         mesh: meshes.add(mesh),
-        material: material.clone(),
+        material: mapmanager.get_texture(&mut *images, &mut *materials, "SW17_5".to_string()),
         ..default()
     });
 
@@ -352,23 +344,4 @@ fn camera_movement_system(
         let rotation_quat_x = Quat::from_rotation_x(rot_delta.x);
         transform.rotation *= rotation_quat_x;
     }
-}
-
-fn camera_rotation_system(
-    mut query: Query<&mut Transform, With<Camera3d>>,
-    mut mouse_motion_events: EventReader<MouseMotion>,
-) {
-    // for event in mouse_motion_events.iter() {
-    //     let sensitivity = 0.002;
-
-    //     for mut transform in query.iter_mut() {
-    //         let yaw = -event.delta.x * sensitivity;
-    //         let pitch = -event.delta.y * sensitivity;
-
-    //         let rotation = Quat::from_rotation_y(yaw) * Quat::from_rotation_x(pitch);
-    //         transform.rotation.x += rotation.x;
-    //         transform.rotation.y += rotation.y;
-    //         // transform.rotation.z += rotation.z;
-    //     }
-    // }
 }
