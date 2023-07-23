@@ -9,10 +9,11 @@ edition = "2021"
 bevy = { version = "0.10.1"}
 tinywad = "0.1.2"
 bevy-earcutr = "0.9.0"
+bevy_editor_pls = "0.4.0"
 
 [patch.crates-io]
-tinywad = { path = "C:\\Users\\MaxNu\\Documents\\shithole\\tinywad" }
-bevy-earcutr = { path = "C:\\Users\\MaxNu\\Documents\\shithole\\bevy-earcutr"}
+tinywad = { path = "lib\\tinywad" }
+bevy-earcutr = { path = "lib\\bevy-earcutr"}
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]

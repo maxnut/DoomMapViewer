@@ -1,4 +1,21 @@
+use bevy::utils::HashMap;
 
+#[derive(Clone, Default)]
+pub struct TexturePatch {
+    pub origin_x: i16,
+    pub origin_y: i16,
+    pub patch: i16,
+}
+#[derive(Clone, Default)]
+pub struct TextureEntry {
+    pub masked: bool,
+    pub width: i16,
+    pub height: i16,
+    pub patch_count: i16,
+    pub patches: Vec<TexturePatch>,
+}
+
+#[derive(Clone, Default)]
 pub struct Thing {
     pub x: i16,
     pub y: i16,
@@ -19,7 +36,7 @@ pub struct Linedef {
     pub front: Sidedef,
     pub back: Sidedef,
     pub start: Vert,
-    pub end: Vert
+    pub end: Vert,
 }
 
 #[derive(Clone, Default)]
@@ -56,5 +73,7 @@ pub struct CompleteMap {
     pub linedef_vec: Vec<Linedef>,
     pub vert_vec: Vec<Vert>,
     pub sector_vec: Vec<Sector>,
-    pub sidefef_vec: Vec<Sidedef>
+    pub sidefef_vec: Vec<Sidedef>,
+    pub pnames: Vec<String>,
+    pub texture_defs: HashMap<String, TextureEntry>,
 }

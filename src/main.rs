@@ -9,15 +9,18 @@ use mapmanager::completemap::*;
 use mapmanager::*;
 
 use bevy::pbr::wireframe::{WireframeConfig, WireframePlugin};
+use bevy::render::render_resource::Face;
 
 use bevy_earcutr::*;
+use bevy_editor_pls::EditorPlugin;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugin(WireframePlugin)
+        // .add_plugin(WireframePlugin)
+        .add_plugin(EditorPlugin::default())
         .add_startup_system(setup)
-        .add_system(camera_movement_system)
+        // .add_system(camera_movement_system)
         .run();
 }
 
@@ -32,30 +35,15 @@ fn setup(
 
     let mut mapmanager = MapManager::new();
 
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
-
-    let mut vertices: Vec<Vec3>;
-    vertices = Vec::new();
-
-    let mut normals: Vec<Vec3>;
-    normals = Vec::new();
-
-    let mut indices: Vec<u32>;
-    indices = Vec::new();
-
-    let mut uvs: Vec<Vec2>;
-    uvs = Vec::new();
-
-    let mut indices_index = 0;
-
-    for (i, linedef) in mapmanager.map.linedef_vec.iter_mut().enumerate() {
+    for (i, linedef) in mapmanager.map.linedef_vec.clone().iter_mut().enumerate() {
         if linedef.front_sidedef >= 0 {
-            let front_sidedef = &mapmanager.map.sidefef_vec[linedef.front_sidedef as usize];
+            let front_sidedef = &mapmanager.map.sidefef_vec[linedef.front_sidedef as usize].clone();
 
             linedef.front = front_sidedef.clone();
 
             if linedef.back_sidedef >= 0 {
-                let back_sidedef = &mapmanager.map.sidefef_vec[linedef.back_sidedef as usize];
+                let back_sidedef =
+                    &mapmanager.map.sidefef_vec[linedef.back_sidedef as usize].clone();
                 linedef.back = back_sidedef.clone();
                 if front_sidedef.sector != back_sidedef.sector {
                     mapmanager.map.sector_vec[front_sidedef.sector as usize]
@@ -71,89 +59,130 @@ fn setup(
                     .push(i as i16);
             }
 
-            let front_sec = &mapmanager.map.sector_vec[front_sidedef.sector as usize];
+            let front_sec = &mapmanager.map.sector_vec[front_sidedef.sector as usize].clone();
 
-            let vert1 = &mapmanager.map.vert_vec[linedef.start_vert as usize];
-            let vert2 = &mapmanager.map.vert_vec[linedef.end_vert as usize];
+            let vert1 = &mapmanager.map.vert_vec[linedef.start_vert as usize].clone();
+            let vert2 = &mapmanager.map.vert_vec[linedef.end_vert as usize].clone();
 
             linedef.start = vert1.clone();
             linedef.end = vert2.clone();
 
             if linedef.back_sidedef >= 0 {
-                let back_sidedef = &mapmanager.map.sidefef_vec[linedef.back_sidedef as usize];
+                let back_sidedef =
+                    &mapmanager.map.sidefef_vec[linedef.back_sidedef as usize].clone();
 
-                let back_sec = &mapmanager.map.sector_vec[back_sidedef.sector as usize];
+                let back_sec = &mapmanager.map.sector_vec[back_sidedef.sector as usize].clone();
 
                 if front_sec.ceil_height > back_sec.ceil_height {
-                    MapManager::generate_wall(
-                        &mut vertices,
-                        &mut indices,
-                        &mut uvs,
-                        &mut normals,
+                    mapmanager.generate_wall(
+                        &mut commands,
+                        &mut meshes,
+                        &mut images,
+                        &mut materials,
                         vert1.clone(),
                         vert2.clone(),
                         back_sec.ceil_height,
                         front_sec.ceil_height,
-                        &mut indices_index,
+                        std::str::from_utf8(front_sidedef.upper_tex.as_slice())
+                            .unwrap()
+                            .to_string(),
                         false,
                     );
                 }
 
                 if front_sec.ceil_height < back_sec.ceil_height {
-                    MapManager::generate_wall(
-                        &mut vertices,
-                        &mut indices,
-                        &mut uvs,
-                        &mut normals,
+                    mapmanager.generate_wall(
+                        &mut commands,
+                        &mut meshes,
+                        &mut images,
+                        &mut materials,
                         vert1.clone(),
                         vert2.clone(),
                         front_sec.ceil_height,
                         back_sec.ceil_height,
-                        &mut indices_index,
+                        std::str::from_utf8(back_sidedef.upper_tex.as_slice())
+                            .unwrap()
+                            .to_string(),
                         true,
                     );
                 }
 
                 if front_sec.floor_height < back_sec.floor_height {
-                    MapManager::generate_wall(
-                        &mut vertices,
-                        &mut indices,
-                        &mut uvs,
-                        &mut normals,
+                    mapmanager.generate_wall(
+                        &mut commands,
+                        &mut meshes,
+                        &mut images,
+                        &mut materials,
                         vert1.clone(),
                         vert2.clone(),
                         front_sec.floor_height,
                         back_sec.floor_height,
-                        &mut indices_index,
+                        std::str::from_utf8(front_sidedef.lower_tex.as_slice())
+                            .unwrap()
+                            .to_string(),
                         false,
                     );
                 }
 
                 if front_sec.floor_height > back_sec.floor_height {
-                    MapManager::generate_wall(
-                        &mut vertices,
-                        &mut indices,
-                        &mut uvs,
-                        &mut normals,
+                    mapmanager.generate_wall(
+                        &mut commands,
+                        &mut meshes,
+                        &mut images,
+                        &mut materials,
                         vert1.clone(),
                         vert2.clone(),
                         back_sec.floor_height,
                         front_sec.floor_height,
-                        &mut indices_index,
+                        std::str::from_utf8(back_sidedef.lower_tex.as_slice())
+                            .unwrap()
+                            .to_string(),
                         true,
                     );
                 }
+
+                mapmanager.generate_wall(
+                    &mut commands,
+                    &mut meshes,
+                    &mut images,
+                    &mut materials,
+                    vert1.clone(),
+                    vert2.clone(),
+                    i16::max(front_sec.floor_height, back_sec.floor_height),
+                    i16::min(front_sec.ceil_height, back_sec.ceil_height),
+                    std::str::from_utf8(front_sidedef.mid_tex.as_slice())
+                        .unwrap()
+                        .to_string(),
+                    false,
+                );
+
+                mapmanager.generate_wall(
+                    &mut commands,
+                    &mut meshes,
+                    &mut images,
+                    &mut materials,
+                    vert1.clone(),
+                    vert2.clone(),
+                    i16::max(front_sec.floor_height, back_sec.floor_height),
+                    i16::min(front_sec.ceil_height, back_sec.ceil_height),
+                    std::str::from_utf8(back_sidedef.mid_tex.as_slice())
+                        .unwrap()
+                        .to_string(),
+                    true,
+                );
             } else {
-                MapManager::generate_wall(
-                    &mut vertices,
-                    &mut indices,
-                    &mut uvs,
-                    &mut normals,
+                mapmanager.generate_wall(
+                    &mut commands,
+                    &mut meshes,
+                    &mut images,
+                    &mut materials,
                     vert1.clone(),
                     vert2.clone(),
                     front_sec.floor_height,
                     front_sec.ceil_height,
-                    &mut indices_index,
+                    std::str::from_utf8(front_sidedef.mid_tex.as_slice())
+                        .unwrap()
+                        .to_string(),
                     false,
                 );
             }
@@ -161,11 +190,11 @@ fn setup(
     }
 
     for sector in &mapmanager.map.sector_vec.clone() {
-        println!("\nNew Vector {} ---------------------", sector.light_level);
+        // println!("\nNew Vector {} ---------------------", sector.light_level);
 
         let shapes = mapmanager.detect_shapes(sector);
 
-        println!("Detected shapes: {}", shapes.len());
+        // println!("Detected shapes: {}", shapes.len());
 
         let mut biggest_area = f32::MIN;
         let mut biggest_aabb_index = 0;
@@ -235,7 +264,7 @@ fn setup(
                 let actual_mesh = mesh_floor.unwrap();
                 commands
                     .spawn(PbrBundle {
-                        mesh: meshes.add(actual_mesh),
+                        mesh: meshes.add(actual_mesh.clone()),
                         material: mapmanager.get_texture(
                             &mut images,
                             &mut materials,
@@ -253,23 +282,38 @@ fn setup(
                             * Quat::from_rotation_z(180.0f32.to_radians()),
                         ..Default::default()
                     });
+
+                //TODO: save flipped materials in hashmap
+
+                let ceil_mat_handle = mapmanager.get_texture(
+                    &mut images,
+                    &mut materials,
+                    std::str::from_utf8(&sector.ceil_tex).unwrap().to_string(),
+                );
+
+                let mut ceil_mat = materials.get(&ceil_mat_handle).unwrap().clone();
+                ceil_mat.cull_mode = Some(Face::Front);
+
+                commands
+                    .spawn(PbrBundle {
+                        mesh: meshes.add(actual_mesh.clone()),
+                        material: materials.add(ceil_mat),
+                        ..default()
+                    })
+                    .insert(Transform {
+                        translation: Vec3 {
+                            x: 0.,
+                            y: sector.ceil_height as f32,
+                            z: 0.,
+                        },
+                        rotation: Quat::from_rotation_x(-90.0f32.to_radians())
+                            * Quat::from_rotation_z(180.0f32.to_radians()),
+                        ..Default::default()
+                    });
             }
             None => println!("Merda culo"),
         }
     }
-
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
-
-    mesh.set_indices(Some(mesh::Indices::U32(indices)));
-
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(mesh),
-        material: mapmanager.get_texture(&mut *images, &mut *materials, "SW17_5".to_string()),
-        ..default()
-    });
 
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
