@@ -4,12 +4,10 @@ mod mapmanager;
 
 use bevy::prelude::*;
 use bevy::render::mesh::{self, PrimitiveTopology};
+use bevy::render::render_resource::Face;
 use bevy::render::texture::Image;
 use mapmanager::completemap::*;
 use mapmanager::*;
-
-use bevy::pbr::wireframe::{WireframeConfig, WireframePlugin};
-use bevy::render::render_resource::Face;
 
 use bevy_earcutr::*;
 use bevy_editor_pls::EditorPlugin;
@@ -17,7 +15,6 @@ use bevy_editor_pls::EditorPlugin;
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        // .add_plugin(WireframePlugin)
         .add_plugin(EditorPlugin::default())
         .add_startup_system(setup)
         // .add_system(camera_movement_system)
@@ -26,13 +23,10 @@ fn main() {
 
 fn setup(
     mut commands: Commands,
-    mut wireframe_config: ResMut<WireframeConfig>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    wireframe_config.global = true;
-
     let mut mapmanager = MapManager::new();
 
     for (i, linedef) in mapmanager.map.linedef_vec.clone().iter_mut().enumerate() {
@@ -314,17 +308,6 @@ fn setup(
             None => println!("Merda culo"),
         }
     }
-
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
-            illuminance: 100000.0,
-            color: Color::WHITE,
-            shadows_enabled: false,
-            ..default()
-        },
-        transform: Transform::from_xyz(4.0, 8.0, 4.0),
-        ..default()
-    });
 
     commands.spawn(Camera3dBundle {
         transform: Transform::from_xyz(0., 0., 5.).looking_at(Vec3::ZERO, Vec3::Y),
