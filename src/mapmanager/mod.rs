@@ -8,6 +8,7 @@ use bevy::render::render_resource::{AddressMode, Extent3d, Face, TextureDimensio
 use bevy::render::texture::ImageSampler;
 use bevy::utils::hashbrown::HashMap;
 use bevy_earcutr::*;
+use bevy_editor_pls::egui::TextBuffer;
 use completemap::*;
 use std::fmt;
 use tinywad::lump::LumpKind;
@@ -390,7 +391,7 @@ impl MapManager {
 
         commands.spawn(PbrBundle {
             mesh: meshes.add(mesh),
-            material: self.get_texture(&mut images, &mut materials, tex_name),
+            material: self.get_texture(&mut images, &mut materials, tex_name, false),
             ..default()
         });
     }
@@ -494,8 +495,12 @@ impl MapManager {
     fn get_patch(
         &mut self,
         mut images: &mut Assets<Image>,
-        name: String,
+        mut name: String,
     ) -> Result<Handle<Image>, String> {
+        name = name.as_str().replace("_flip", "");
+
+        name = name.to_uppercase();
+
         if self.tex_map.contains_key(&name) {
             return Ok(self.tex_map[&name].clone());
         }
@@ -622,9 +627,14 @@ impl MapManager {
         &mut self,
         mut images: &mut Assets<Image>,
         mut materials: &mut Assets<StandardMaterial>,
-        name: String,
+        mut name: String,
+        flip: bool,
     ) -> Handle<StandardMaterial> {
-        if self.tex_map.contains_key(&name) {
+        if flip {
+            name += "_flip";
+        }
+
+        if self.mat_map.contains_key(&name) {
             return self.mat_map[&name].clone();
         }
 
@@ -651,7 +661,13 @@ impl MapManager {
 
         let material = materials.add(StandardMaterial {
             base_color_texture: Some(coolasstexture),
-            // cull_mode: Some(Face::Front),
+            cull_mode: if flip {
+                Some(Face::Front)
+            } else {
+                Some(Face::Back)
+            },
+            metallic: 0.,
+            reflectance: 0.,
             ..Default::default()
         });
 

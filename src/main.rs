@@ -263,6 +263,7 @@ fn setup(
                             &mut images,
                             &mut materials,
                             std::str::from_utf8(&sector.floor_tex).unwrap().to_string(),
+                            false,
                         ),
                         ..default()
                     })
@@ -277,21 +278,15 @@ fn setup(
                         ..Default::default()
                     });
 
-                //TODO: save flipped materials in hashmap
-
-                let ceil_mat_handle = mapmanager.get_texture(
-                    &mut images,
-                    &mut materials,
-                    std::str::from_utf8(&sector.ceil_tex).unwrap().to_string(),
-                );
-
-                let mut ceil_mat = materials.get(&ceil_mat_handle).unwrap().clone();
-                ceil_mat.cull_mode = Some(Face::Front);
-
                 commands
                     .spawn(PbrBundle {
                         mesh: meshes.add(actual_mesh.clone()),
-                        material: materials.add(ceil_mat),
+                        material: mapmanager.get_texture(
+                            &mut images,
+                            &mut materials,
+                            std::str::from_utf8(&sector.ceil_tex).unwrap().to_string(),
+                            true,
+                        ),
                         ..default()
                     })
                     .insert(Transform {
@@ -313,6 +308,11 @@ fn setup(
         transform: Transform::from_xyz(0., 0., 5.).looking_at(Vec3::ZERO, Vec3::Y),
         ..default()
     });
+
+    info!(
+        "asiousauoisauisauidasuidiusaduisa {}",
+        mapmanager.mat_map.len()
+    );
 }
 
 fn camera_movement_system(
