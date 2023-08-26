@@ -13,6 +13,7 @@ pub struct TextureEntry {
     pub height: i16,
     pub patch_count: i16,
     pub patches: Vec<TexturePatch>,
+    pub wad_ind: usize,
 }
 
 #[derive(Clone, Default)]
@@ -74,6 +75,6 @@ pub struct CompleteMap {
     pub vert_vec: Vec<Vert>,
     pub sector_vec: Vec<Sector>,
     pub sidefef_vec: Vec<Sidedef>,
-    pub pnames: Vec<String>,
+    pub pnames: Vec<Vec<String>>,
     pub texture_defs: HashMap<String, TextureEntry>,
 }

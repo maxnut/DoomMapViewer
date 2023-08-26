@@ -1,19 +1,11 @@
 use std::{
-    fmt::{
-        Display,
-        Result
-    }, fs,
+    fmt::{Display, Result},
+    fs,
 };
 
-use crate::{
-    models::lump::Lump,
-    lump::LumpData,
-};
+use crate::{lump::LumpData, models::lump::Lump};
 
-use super::{
-    mus::Mus,
-    mid::Midi
-};
+use super::{mid::Midi, mus::Mus};
 
 /// Represents a DOOM music
 #[derive(Clone)]
@@ -23,7 +15,7 @@ pub struct DoomMusic {
     /// Lump data
     data: LumpData,
     /// MIDI
-    midi: Option<Midi>
+    midi: Option<Midi>,
 }
 
 impl DoomMusic {
@@ -31,14 +23,13 @@ impl DoomMusic {
         Self {
             mus: Mus::new(),
             data,
-            midi: None
-
+            midi: None,
         }
     }
 }
 
 impl Display for DoomMusic {
-    fn fmt(&self,f: &mut std::fmt::Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result {
         write!(
             f,
             "Name: {}, Size: {}, Offset: {}, Channels {}, {}, Instruments {}",
@@ -54,35 +45,28 @@ impl Display for DoomMusic {
 
 impl Lump for DoomMusic {
     fn parse(&mut self) {
-        let buffer: &[u8] = &self.data.buffer;
-
-        // Parsing as a MUS lump
-        self.mus = buffer.into();
-
-        // Midi::try_from(&self.mus).unwrap();
-
-        // Parsing into the MIDI format
-        if let Ok(value) = Midi::try_from(&self.mus) {
-            self.midi = Some(value);
-        }
+        // let buffer: &[u8] = &self.data.buffer;
+        //
+        // // Parsing as a MUS lump
+        // self.mus = buffer.into();
+        //
+        // // Midi::try_from(&self.mus).unwrap();
+        //
+        // // Parsing into the MIDI format
+        // if let Ok(value) = Midi::try_from(&self.mus) {
+        //     self.midi = Some(value);
+        // }
     }
 
     fn save(&self, dir: &str) {
         if self.midi.is_none() {
-            return
+            return;
         }
 
         let midi = self.midi.as_ref().unwrap();
-        let path = format!(
-            "{}/{}.mid",
-            dir,
-            self.data.metadata.id_ascii()
-        );
-        
-        fs::write(
-            path,
-            midi.buffer()
-        ).unwrap_or_default();
+        let path = format!("{}/{}.mid", dir, self.data.metadata.id_ascii());
+
+        fs::write(path, midi.buffer()).unwrap_or_default();
     }
 
     fn data(&self) -> LumpData {

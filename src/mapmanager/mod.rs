@@ -1,17 +1,15 @@
-pub(crate) mod completemap;
+pub(crate) mod complete_map;
 
 use crate::flat::Flat;
 use bevy::prelude::*;
 use bevy::render::mesh;
 use bevy::render::mesh::PrimitiveTopology;
-use bevy::render::render_resource::{AddressMode, Extent3d, Face, TextureDimension, TextureFormat};
+use bevy::render::render_resource::{AddressMode, Extent3d, Face, TextureFormat};
 use bevy::render::texture::ImageSampler;
 use bevy::utils::hashbrown::HashMap;
 use bevy_earcutr::*;
-use bevy_editor_pls::egui::TextBuffer;
-use completemap::*;
-use std::fmt;
-use tinywad::lump::LumpKind;
+use complete_map::*;
+use tinywad::lump::{LumpData, LumpKind};
 use tinywad::lumps::palette::Palettes;
 use tinywad::lumps::patch::DoomImage;
 use tinywad::models::lump::Lump;
@@ -19,128 +17,184 @@ use tinywad::wad::Wad;
 
 pub struct MapManager {
     palette: Palettes,
-    pub wad: Wad,
+    pub res_wads: Vec<Wad>,
     pub map: CompleteMap,
     pub tex_map: HashMap<String, Handle<Image>>,
     pub mat_map: HashMap<String, Handle<StandardMaterial>>,
 }
 
 impl MapManager {
-    pub fn new() -> Self {
+    pub fn new(iwad_path: String, pwad_path: String, map_ind: i32) -> Self {
         let mut manager = MapManager {
-            wad: Wad::new(),
+            res_wads: Vec::new(),
             map: CompleteMap::default(),
             palette: Palettes::default(),
             mat_map: HashMap::new(),
             tex_map: HashMap::new(),
         };
 
-        manager.wad.load_from_file("DOOM2.wad");
+        let mut pwad = Wad::new();
+        pwad.load_from_file(pwad_path);
 
-        let things = manager.wad.lump("THINGS").unwrap().data();
-        let things_num = things.metadata.size as usize / 10;
+        let mut iwad = Wad::new();
+        iwad.load_from_file(iwad_path);
 
-        let linedefs = manager.wad.lump("LINEDEFS").unwrap().data();
-        let linedefs_num = linedefs.metadata.size as usize / 14;
+        manager.res_wads.push(pwad);
+        manager.res_wads.push(iwad);
 
-        let verts = manager.wad.lump("VERTEXES").unwrap().data();
-        let verts_num = verts.metadata.size as usize / 4;
+        let mut map_ind_string = "";
 
-        let sectors = manager.wad.lump("SECTORS").unwrap().data();
-        let sectors_num = sectors.metadata.size as usize / 26;
+        let s = map_ind.to_string();
 
-        let sidedefs = manager.wad.lump("SIDEDEFS").unwrap().data();
-        let sidedefs_num = sidedefs.metadata.size as usize / 30;
-
-        let pnames = manager.wad.lump("PNAMES").unwrap().data();
-        let pnames_num = i32::from_le_bytes([
-            pnames.buffer[0],
-            pnames.buffer[1],
-            pnames.buffer[2],
-            pnames.buffer[3],
-        ]) as usize;
-
-        for i in 1..pnames_num {
-            let offset = (i * 8) - 4;
-            let mut arr = [0; 8];
-            arr.copy_from_slice(&pnames.buffer[(offset)..(offset + 8)]);
-            manager
-                .map
-                .pnames
-                .push(std::str::from_utf8(arr.as_slice()).unwrap().to_string());
+        if map_ind > 0
+        {
+            map_ind_string = s.as_str();
         }
 
-        let texture1 = manager.wad.lump("TEXTURE1").unwrap().data();
-        let texture1_num = i32::from_le_bytes([
-            texture1.buffer[0],
-            texture1.buffer[1],
-            texture1.buffer[2],
-            texture1.buffer[3],
-        ]) as usize;
+        info!("KUR {}", map_ind_string);
 
-        let paldata = manager.wad.lump("PLAYPAL").unwrap().data();
+        let things = manager.res_wads[0].lump(format!("THINGS{}", map_ind_string).as_str()).unwrap().data();
+        let things_num = things.metadata.size as usize / 10;
 
-        manager.palette = Palettes::new();
-        manager.palette.set_data(paldata);
-        manager.palette.parse();
+        let linedefs = manager.res_wads[0].lump(format!("LINEDEFS{}", map_ind_string).as_str()).unwrap().data();
+        let linedefs_num = linedefs.metadata.size as usize / 14;
 
-        for i in 1..texture1_num {
-            let tex_offset = i * 4;
+        let verts = manager.res_wads[0].lump(format!("VERTEXES{}", map_ind_string).as_str()).unwrap().data();
+        let verts_num = verts.metadata.size as usize / 4;
 
-            let offset = i32::from_le_bytes([
-                texture1.buffer[tex_offset],
-                texture1.buffer[tex_offset + 1],
-                texture1.buffer[tex_offset + 2],
-                texture1.buffer[tex_offset + 3],
+        let sectors = manager.res_wads[0].lump(format!("SECTORS{}", map_ind_string).as_str()).unwrap().data();
+        let sectors_num = sectors.metadata.size as usize / 26;
+
+        let sidedefs = manager.res_wads[0].lump(format!("SIDEDEFS{}", map_ind_string).as_str()).unwrap().data();
+        let sidedefs_num = sidedefs.metadata.size as usize / 30;
+
+        let mut found_pal = false;
+
+        for (wad_ind, wad) in manager.res_wads.iter().enumerate() {
+            if !found_pal {
+                let pal_opt = wad.lump("PLAYPAL");
+                match pal_opt {
+                    None => {}
+                    Some(x) => {
+                        manager.palette = Palettes::new();
+                        manager.palette.set_data(x.data());
+                        manager.palette.parse();
+                        found_pal = true;
+                    }
+                }
+            }
+
+            let mut names: Vec<String> = Vec::new();
+
+            let pnames_opt = wad.lump("PNAMES");
+            let pnames: LumpData;
+            match pnames_opt {
+                None => {
+                    manager.map.pnames.push(names);
+                    continue;
+                }
+                Some(x) => pnames = x.data(),
+            }
+
+            let pnames_num = i32::from_le_bytes([
+                pnames.buffer[0],
+                pnames.buffer[1],
+                pnames.buffer[2],
+                pnames.buffer[3],
             ]) as usize;
 
-            let mut tex_name = [0; 8];
-            tex_name.copy_from_slice(&texture1.buffer[(offset)..(offset + 8)]);
+            for i in 1..pnames_num {
+                let offset = (i * 8) - 4;
+                let mut arr = [0; 8];
+                arr.copy_from_slice(&pnames.buffer[(offset)..(offset + 8)]);
+                names.push(std::str::from_utf8(arr.as_slice()).unwrap().to_string());
+            }
 
-            let mut tex_entry = TextureEntry {
-                width: i16::from_le_bytes([
-                    texture1.buffer[offset + 12],
-                    texture1.buffer[offset + 13],
-                ]),
-                height: i16::from_le_bytes([
-                    texture1.buffer[offset + 14],
-                    texture1.buffer[offset + 15],
-                ]),
-                patch_count: i16::from_le_bytes([
-                    texture1.buffer[offset + 20],
-                    texture1.buffer[offset + 21],
-                ]),
-                ..default()
-            };
+            manager.map.pnames.push(names);
 
-            for j in 0..tex_entry.patch_count {
-                let entry_offset = offset + 22 + (j as usize * 10);
-                let patch = TexturePatch {
-                    origin_x: i16::from_le_bytes([
-                        texture1.buffer[entry_offset],
-                        texture1.buffer[entry_offset + 1],
-                    ]),
-                    origin_y: i16::from_le_bytes([
-                        texture1.buffer[entry_offset + 2],
-                        texture1.buffer[entry_offset + 3],
-                    ]),
-                    patch: i16::from_le_bytes([
-                        texture1.buffer[entry_offset + 4],
-                        texture1.buffer[entry_offset + 5],
-                    ]),
+            let texture1_opt = wad.lump("TEXTURE1");
+            let texture1: LumpData;
+            match texture1_opt {
+                None => {
+                    continue;
+                }
+                Some(x) => texture1 = x.data(),
+            }
 
+            let texture1_num = i32::from_le_bytes([
+                texture1.buffer[0],
+                texture1.buffer[1],
+                texture1.buffer[2],
+                texture1.buffer[3],
+            ]) as usize;
+
+            for i in 1..texture1_num {
+                let tex_offset = i * 4;
+
+                let offset = i32::from_le_bytes([
+                    texture1.buffer[tex_offset],
+                    texture1.buffer[tex_offset + 1],
+                    texture1.buffer[tex_offset + 2],
+                    texture1.buffer[tex_offset + 3],
+                ]) as usize;
+
+                let mut tex_name = [0; 8];
+                tex_name.copy_from_slice(&texture1.buffer[(offset)..(offset + 8)]);
+
+                if manager
+                    .map
+                    .texture_defs
+                    .contains_key(std::str::from_utf8(tex_name.as_slice()).unwrap())
+                {
+                    continue;
+                }
+
+                let mut tex_entry = TextureEntry {
+                    width: i16::from_le_bytes([
+                        texture1.buffer[offset + 12],
+                        texture1.buffer[offset + 13],
+                    ]),
+                    height: i16::from_le_bytes([
+                        texture1.buffer[offset + 14],
+                        texture1.buffer[offset + 15],
+                    ]),
+                    patch_count: i16::from_le_bytes([
+                        texture1.buffer[offset + 20],
+                        texture1.buffer[offset + 21],
+                    ]),
+                    wad_ind: wad_ind,
                     ..default()
                 };
 
-                tex_entry.patches.push(patch);
-            }
+                for j in 0..tex_entry.patch_count {
+                    let entry_offset = offset + 22 + (j as usize * 10);
+                    let patch = TexturePatch {
+                        origin_x: i16::from_le_bytes([
+                            texture1.buffer[entry_offset],
+                            texture1.buffer[entry_offset + 1],
+                        ]),
+                        origin_y: i16::from_le_bytes([
+                            texture1.buffer[entry_offset + 2],
+                            texture1.buffer[entry_offset + 3],
+                        ]),
+                        patch: i16::from_le_bytes([
+                            texture1.buffer[entry_offset + 4],
+                            texture1.buffer[entry_offset + 5],
+                        ]),
 
-            manager.map.texture_defs.insert(
-                std::str::from_utf8(tex_name.as_slice())
-                    .unwrap()
-                    .to_string(),
-                tex_entry,
-            );
+                        ..default()
+                    };
+
+                    tex_entry.patches.push(patch);
+                }
+
+                manager.map.texture_defs.insert(
+                    std::str::from_utf8(tex_name.as_slice())
+                        .unwrap()
+                        .to_string(),
+                    tex_entry,
+                );
+            }
         }
 
         for i in 0..things_num {
@@ -301,14 +355,55 @@ impl MapManager {
         mut materials: &mut Assets<StandardMaterial>,
         vert1: Vert,
         vert2: Vert,
-        floor_height: i16,
-        ceiling_height: i16,
+        mut floor_height: i16,
+        mut ceiling_height: i16,
+        off_x: i16,
+        off_y: i16,
         tex_name: String,
         backface: bool,
+        pegged: i16,
+        mid: bool,
     ) {
         if tex_name.as_str().trim_matches(char::from(0)) == "-" {
             return;
         }
+
+        let mut tex_width = 1.;
+        let mut tex_height = 1.;
+
+        if self.map.texture_defs.contains_key(&tex_name) {
+            match self
+                .generate_image_from_texentry(images, self.map.texture_defs[&tex_name].clone())
+            {
+                Ok(tex) => {
+                    let img = images.get(&tex);
+                    tex_width = img.unwrap().size().x;
+                    tex_height = img.unwrap().size().y;
+                }
+                Err(err) => {
+                    error!(err);
+                }
+            }
+        }
+
+        if mid {
+            if pegged == 0 {
+                floor_height = ceiling_height - tex_height as i16;
+            } else {
+                ceiling_height = floor_height + tex_height as i16;
+            }
+            floor_height += off_y;
+            ceiling_height += off_y;
+        }
+
+        let len = (Vec2::new(vert1.x as f32, vert1.y as f32)
+            - Vec2::new(vert2.x as f32, vert2.y as f32))
+        .length();
+        let height = (ceiling_height - floor_height) as f32;
+        let u = len / (tex_width);
+        let v = height / (tex_height);
+        let ox = off_x as f32 / tex_width;
+        let oy = off_y as f32 / tex_height;
 
         let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
 
@@ -345,12 +440,25 @@ impl MapManager {
             vert2.y as f32,
         ));
 
-        let mut _uvs = [
-            Vec2::new(1.0, 1.0),
-            Vec2::new(1.0, 0.0),
-            Vec2::new(0.0, 1.0),
-            Vec2::new(0.0, 0.0),
-        ];
+        if pegged == 2 {
+            let sheight = ceiling_height - floor_height;
+            let sv = sheight as f32 / (tex_height);
+
+            uvs.push(Vec2::new(ox, 1. - sv + v));
+            uvs.push(Vec2::new(ox, 1. - sv));
+            uvs.push(Vec2::new(u + ox, 1. - sv + v));
+            uvs.push(Vec2::new(u + ox, 1. - sv));
+        } else if pegged == 1 {
+            uvs.push(Vec2::new(ox, v + oy));
+            uvs.push(Vec2::new(ox, oy));
+            uvs.push(Vec2::new(u + ox, v + oy));
+            uvs.push(Vec2::new(u + ox, oy));
+        } else {
+            uvs.push(Vec2::new(ox, 1. - oy));
+            uvs.push(Vec2::new(ox, 1. - v - oy));
+            uvs.push(Vec2::new(u + ox, 1. - oy));
+            uvs.push(Vec2::new(u + ox, 1. - v - oy));
+        }
 
         if backface {
             indices.push(0);
@@ -367,8 +475,6 @@ impl MapManager {
             indices.push(1);
             indices.push(2);
         }
-
-        uvs.extend(_uvs);
 
         let normal = Vec3::new(
             vert1.x as f32 - vert2.x as f32,
@@ -505,13 +611,25 @@ impl MapManager {
             return Ok(self.tex_map[&name].clone());
         }
 
-        let Some(texture_lump) = self.wad.lump(name.as_str().trim_matches(char::from(0)))
-            else
-            {
-                return Err(format!("Could not get lump for {}", name.as_str().trim_matches(char::from(0))));
-            };
+        let mut texture_lump_data: LumpData = LumpData::default();
 
-        let texture_lump_data = texture_lump.data();
+        let mut found = false;
+
+        for wad in &self.res_wads {
+            let lump = wad.lump(name.as_str().trim_matches(char::from(0)));
+            if lump.is_some() {
+                texture_lump_data = lump.unwrap().data();
+                found = true;
+                break;
+            }
+        }
+
+        if !found {
+            return Err(format!(
+                "Could not get lump for {}",
+                name.as_str().trim_matches(char::from(0))
+            ));
+        };
 
         if texture_lump_data.metadata.size <= 0 {
             return Err("Lump size was 0".parse().unwrap());
@@ -536,6 +654,13 @@ impl MapManager {
             )
         };
 
+        if width == 0 || height == 0 {
+            return Err(format!(
+                "Width or height was 0 {}",
+                name.as_str().trim_matches(char::from(0))
+            ));
+        };
+
         let ext: Extent3d = Extent3d {
             width: width as u32,
             height: height as u32,
@@ -551,8 +676,8 @@ impl MapManager {
 
         let mut descriptor = ImageSampler::nearest_descriptor();
 
-        // descriptor.address_mode_u = AddressMode::Repeat;
-        // descriptor.address_mode_v = AddressMode::Repeat;
+        descriptor.address_mode_u = AddressMode::Repeat;
+        descriptor.address_mode_v = AddressMode::Repeat;
 
         coolasstexture.sampler_descriptor = ImageSampler::Descriptor(descriptor);
 
@@ -571,7 +696,10 @@ impl MapManager {
         let mut data: Vec<u8> = vec![0; entry.width as usize * entry.height as usize * 4];
 
         for patch in entry.patches {
-            match self.get_patch(images, self.map.pnames[patch.patch as usize].clone()) {
+            match self.get_patch(
+                images,
+                self.map.pnames[entry.wad_ind][patch.patch as usize].clone(),
+            ) {
                 Ok(image) => {
                     if patch.origin_x < 0 || patch.origin_y < 0 {
                         continue;
@@ -666,8 +794,7 @@ impl MapManager {
             } else {
                 Some(Face::Back)
             },
-            metallic: 0.,
-            reflectance: 0.,
+            unlit: true,
             ..Default::default()
         });
 
